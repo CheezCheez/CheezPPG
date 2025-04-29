@@ -1,0 +1,25 @@
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+CheezPPG KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+checkSampleInterval KEYWORD2
+
+ppgProcess KEYWORD2
+setWearThreshold KEYWORD2
+
+getRawPPG KEYWORD2
+getAvgPPG KEYWORD2
+getFilterPPG KEYWORD2
+
+getPpgPeak KEYWORD2
+getPpgRr KEYWORD2
+getPpgHr KEYWORD2
+getPpgHrv KEYWORD2
+getPpgisWear KEYWORD2
