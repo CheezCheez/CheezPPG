@@ -20,94 +20,49 @@
 */
 #ifndef __CheezPPG_H__  
 #define __CheezPPG_H__  
-   
-#include <Arduino.h>  
-#include <stdint.h>  
-#include "RingBuffer.h"  
 
-#define PPG_BUFFER_LEN 18      // 峰值检测缓冲区大小  
-   
-class CheezPPG  
-{  
-  public:  
-    CheezPPG(  
-        uint8_t inputPin = A0,   
-        unsigned long sampleRate = 125    
-    );   
-    ~CheezPPG() {};   
-  
-    bool checkSampleInterval(void);  
-    void ppgProcess();  
-    void setWearThreshold(int wearThreshold =80);
+#include <Arduino.h>
+#include "RingBuffer.h"
 
-    int getRawPPG(void) { return _rawPPG; }  
-    int getAvgPPG(void) { return _avgPPG; }   
-    float getFilterPPG(void) { return _filteredPPG; }  
-    uint8_t getPpgPeak(void) { return _peak; }  
-    float getPpgRr(void) { return _rrAvg; }   
-    float getPpgHr(void) { return _hr; }  
-    float getPpgHrv(void) { return _hrv; } 
-    uint8_t getPpgisWear(void) { return _isWear; } 
-
-  private:  
-  
-    uint8_t _ppgPin;  
-    unsigned long _sampleRate;   
-
-    RingBuffer<int, 5> rrBuffer;   
-    RingBuffer<float, 20> avgBuffer;   
+class CheezPPG 
+{
+public:
+    CheezPPG(int inputPin, int sampleRate);
     
-    // 佩戴检测部分  
-    uint8_t _isWear;        
-    bool enableWearCheck;  
-    int _wearCount;           
-    int _wearThreshold;      
-    int _stableCount;         
+    void setWearThreshold(int Threshold = 80);
 
-    // 峰值检测部分  
-    float dataBuffer[PPG_BUFFER_LEN];  
-    float meanBuffer[PPG_BUFFER_LEN];  
-    float stdDevBuffer[PPG_BUFFER_LEN];  
-    int dataIndex;  
-    uint8_t _peak;   
+    bool checkSampleInterval();
+    void ppgProcess(); 
+    bool getPpgisWear() const { return _isWear; }
+    bool getPpgPeak() const{ return _peak; } 
+    int getRawPPG()const { return _rawPPG; } 
+    int getAvgPPG()const { return _avgPPG; }
+    int getFilterPPG()const { return _filteredPPG; }
+    float getPpgHr()const{ return _hr; }
+    float getPpgHrv()const{return _hrv; } 
 
-    // HR/HRV部分  
-    bool _ignoreReading;  
-    bool _firstPulseDetected;  
-    unsigned long _firstPulseTime;  
-    unsigned long _secondPulseTime;  
+private:
+    int8_t _inputPin;
+    int _sampleRate;
+    int _wearThreshold = 80;
+    static const int _stableCount = 180;
+ 
+    bool _peak = false;
+    bool _isWear = false;
+    int _wearCount = 0;
+    int _rawPPG = 0;
+    int  _avgPPG = 0;
+    int  _filteredPPG = 0;
+    float _hr = 0, _hrv = 0;
+ 
+    RingBuffer<int, 5> _rrBuffer;
+    RingBuffer<int, 10> _avgBuffer; 
 
-    // 信号及结果  
-    int _rawPPG;   
-    float _avgPPG; 
-    float _filteredPPG;   
-    float _rrAvg;  
-    float _hr;  
-    float _hrv;  
-    
-    // 带通滤波器状态变量  
-    float x1;  
-    float x2;  
-    float y1;  
-    float y2;  
-    
-    // 时间变量  
-    unsigned long _pastTime;  
-    long _timer;  
+    void calculateHRHRV(bool getPeak);
+    float AverageFilter(float input);
+    float bandpassFilter(float input);
+    bool detectWearStatus(int ppgValue);
+    bool detectPPGPeak(float new_sample);
+};
 
-    // 带通滤波器系数  
-    static constexpr float BP_B0 = 0.00122714f;  
-    static constexpr float BP_B1 = 0.00245428f;  
-    static constexpr float BP_B2 = 0.00122714f;  
-    static constexpr float BP_A1 = -1.8794700f;  
-    static constexpr float BP_A2 = 0.89155200f;  
-
-    
-    float AverageFilter(float input);  
-    float bandpassFilter(float input);   
-    uint8_t detectWearStatus(int ppgValue);  
-    uint8_t detectPPGPeak(float newSample);   
-    void calculateHRHRV(void);   
-};  
-
-#endif // __CheezPPG_H__  
+#endif // CHEEZ_PPG_H

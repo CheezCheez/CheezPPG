@@ -32,14 +32,7 @@ private:
 public:  
     // 构造函数  
     RingBuffer() : head(0), tail(0), count(0) {}  
-
-    // 初始化缓冲区  
-    void init() {  
-        head = 0;  
-        tail = 0;  
-        count = 0;  
-    }  
-
+  
     // 检查缓冲区是否为空  
     bool isEmpty() const {  
         return count == 0;  
@@ -91,14 +84,14 @@ public:
     }  
 
     // 查看指定索引的元素，不移除  
-    bool peek(int index, T& value) const {  
+    int peek(int index) const {  
         if (isEmpty() || index < 0 || index >= count) {  
-            return false;  
+            return 0;  
         }  
 
         int pos = (head + index) % SIZE;  
-        value = buffer[pos];  
-        return true;  
+        // value = buffer[pos];  
+        return buffer[pos];  
     }  
     
     // 获取缓冲区中的元素数量  

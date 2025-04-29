@@ -1,6 +1,6 @@
 /**
 ******************************************************************************
-* @file   : ppg.ino
+* @file   : CheezPPG_Demo.ino
 * @brief  ：需安装Arduino库 CheezPPG
 * @brief  : 输出：串口,波特率 115200
             采样率：125Hz 
@@ -36,7 +36,7 @@ CheezPPG ppg(INPUT_PIN,SAMPLE_RATE);
 void setup() 
 {
   Serial.begin(115200); 
-  ppg.setWearThreshold(80); // 设置佩戴阈值，不需要佩戴检测可设置为-1
+  ppg.setWearThreshold(-1); // 设置佩戴检测阈值(输入负数则不启用佩戴检测)
 }
 
 void loop() 

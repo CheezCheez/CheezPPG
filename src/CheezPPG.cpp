@@ -1,37 +1,18 @@
-#include "CheezPPG.h"  
-#include <math.h>  
+#include "CheezPPG.h"
+#include <math.h>
 
-CheezPPG::CheezPPG(uint8_t ppgPin, unsigned long sampleRate) : 
-    _ppgPin(ppgPin),   
-    _sampleRate(sampleRate),    
-    _stableCount(180),  
-    _ignoreReading(false),  
-    _firstPulseDetected(false)
-{   
-    for(int i = 0; i < PPG_BUFFER_LEN; i++) {  
-        dataBuffer[i] = 0;  
-        meanBuffer[i] = 0;  
-        stdDevBuffer[i] = 0;  
-    }  
-     
-    rrBuffer.init();  
-    avgBuffer.init();  
-    setWearThreshold();
-}  
-
-void CheezPPG::setWearThreshold(int wearThreshold)
-{
-  if(wearThreshold<0)
-    enableWearCheck = 0;
-  else 
-  { 
-    enableWearCheck = 1;
-    _wearThreshold =  wearThreshold;
-  }
+CheezPPG::CheezPPG(int inputPin, int sampleRate) 
+    : _inputPin(inputPin), _sampleRate(sampleRate) {
 }
 
-bool CheezPPG::checkSampleInterval(void)   
-{  
+void CheezPPG::setWearThreshold(int Threshold)
+{
+    _wearThreshold = Threshold;
+}
+
+bool CheezPPG::checkSampleInterval() {
+    static unsigned long _pastTime;  
+    static long _timer;  
     unsigned long present = micros();  
     unsigned long interval = present - _pastTime;  
     _pastTime = present;  
@@ -42,195 +23,179 @@ bool CheezPPG::checkSampleInterval(void)
         return true;   
     }  
     return false;  
-}  
-   
-float CheezPPG::AverageFilter(float input)   
-{  
-    float avgValue = 0;  
-    avgBuffer.push(input);  
+}
 
-    if (avgBuffer.numItems() > 0) {  
-        float sum = 0;  
-        for (int i = 0; i < avgBuffer.numItems(); i++) {  
-            float value;  
-            avgBuffer.peek(i, value);  
-            sum += value;  
-        }  
-        avgValue = sum / avgBuffer.numItems();  
-    }  
-    
-    _avgPPG = avgValue;  
-    return avgValue;  
-}  
-   
-float CheezPPG::bandpassFilter(float input)   
-{    
+void CheezPPG::ppgProcess() 
+{
+    _rawPPG = analogRead(_inputPin);
+
+    // 平滑滤波
+    _avgPPG = AverageFilter(_rawPPG);
+    _filteredPPG = bandpassFilter(_avgPPG);
+    _peak = detectPPGPeak(_filteredPPG);
+
+    // 计算HR和HRV
+    calculateHRHRV(_peak);
+
+    // 检测佩戴状态
+    _isWear = detectWearStatus(_filteredPPG);
+}
+
+float CheezPPG::AverageFilter(float input) {
+    float avgPPG; 
+    // 平滑滤波
+    _avgBuffer.push(input);
+    if (_avgBuffer.isFull()) {
+        avgPPG = 0;
+        for (int i = 0; i < _avgBuffer.numItems(); i++) {
+            avgPPG += _avgBuffer.peek(i);
+        }
+        avgPPG /= _avgBuffer.numItems();
+    }
+    return avgPPG;  
+}
+
+// 带通滤波器系数 
+const float BP_B0 = 0.00122714f;  
+const float BP_B1 = 0.00245428f;  
+const float BP_B2 = 0.00122714f;  
+const float BP_A1 = -1.8794700f;  
+const float BP_A2 = 0.89155200f; 
+float CheezPPG::bandpassFilter(float input) 
+{
+    static float x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0;
+
     float output =  BP_B0 * input + 
                     BP_B1 * x1 + 
                     BP_B2 * x2 - 
                     BP_A1 * y1 - 
-                    BP_A2 * y2;   
-   
+                    BP_A2 * y2;    
     x2 = x1;  
     x1 = input;  
     y2 = y1;  
-    y1 = output;   
-    _filteredPPG = output;
-    return output;  
-}   
+    y1 = output;    
+    return output;
+}
 
-uint8_t CheezPPG::detectWearStatus(int ppgValue)   
-{  
-    switch(_isWear)   
-    {  
-        case 0:  // 未佩戴状态  
-        {  
-            if (ppgValue > _wearThreshold)   
-                 _wearCount++;   
-            else  
-                _wearCount = 0;   
-            
-            if(_wearCount >= _stableCount)  
-            {   
-                _wearCount = 0;  
-                _isWear = 1;   
+bool CheezPPG::detectWearStatus(int ppgValue) 
+{
+    bool isWear = _isWear;
+    if(_wearThreshold < 0)
+    { 
+        isWear = 1;
+    }
+    else
+    {
+        switch(isWear) 
+        {
+            case 0:  // 未佩戴状态  
+            {  
+                if (ppgValue > _wearThreshold)   
+                    _wearCount++;   
+                else  
+                    _wearCount = 0;   
+                
+                if(_wearCount >= _stableCount) {   
+                    _wearCount = 0;  
+                    isWear = 1;   
+                }  
             }  
-        }  
-        break;  
-        
-        case 1:  // 已佩戴状态  
-        {  
-            if (ppgValue < _wearThreshold)  
-                _wearCount++;   
-            else   
-                _wearCount = 0;   
+            break;
             
-            if(_wearCount >= _stableCount)  
-            {   
-                _wearCount = 0;  
-                _isWear = 0;  
+            case 1:  // 已佩戴状态  
+            {  
+                if (ppgValue < _wearThreshold)  
+                    _wearCount++;   
+                else   
+                    _wearCount = 0;   
+                
+                if(_wearCount >= _stableCount) {   
+                    _wearCount = 0;  
+                    isWear = 0;  
+                }  
             }  
-        }  
-        break;   
-    }  
-    return _isWear;  
-}  
+            break;   
+        } 
+    } 
+    return isWear;  
+}
 
-uint8_t CheezPPG::detectPPGPeak(float newSample)  
-{  	   
-    // 检查峰值  
-    if ((newSample - meanBuffer[dataIndex]) >   
-        (PPG_BUFFER_LEN / 2.0f) * stdDevBuffer[dataIndex])  
-    {  
-        dataBuffer[dataIndex] = newSample + dataBuffer[dataIndex];  
-        _peak = 1;  
-    }  
-    else  
-    {  
-        dataBuffer[dataIndex] = newSample;  
-        _peak = 0;  
-    }   
+#define PPG_BUFFER_LEN 18
+bool CheezPPG::detectPPGPeak(float new_sample) 
+{
+    bool getPeak;
+    // 数据平均值和标准差的缓冲区
+    static float dataBuffer[PPG_BUFFER_LEN];
+    static float meanBuffer[PPG_BUFFER_LEN];
+    static float stdDevBuffer[PPG_BUFFER_LEN];
+    static int data_index = 0;
 
-    // 计算平均值  
-    float sum = 0.0, mean, standardDeviation = 0.0;  
-    for (int i = 0; i < PPG_BUFFER_LEN; ++i)  
-    {  
-        sum += dataBuffer[(dataIndex + i) % PPG_BUFFER_LEN];  
-    }  
-    mean = sum / PPG_BUFFER_LEN;  
+    // 检查峰值
+    if ((new_sample - meanBuffer[data_index]) > 
+    (PPG_BUFFER_LEN / 2) * stdDevBuffer[data_index]) {
+        dataBuffer[data_index] = new_sample + dataBuffer[data_index];
+        getPeak = 1;
+    } else {
+        dataBuffer[data_index] = new_sample;
+        getPeak = 0;
+    }
 
-    // 计算标准差  
-    for (int i = 0; i < PPG_BUFFER_LEN; ++i)  
-    {  
-        standardDeviation += pow(dataBuffer[i] - mean, 2);  
-    }  
-    
-    // 更新平均值和标准差缓冲区  
-    meanBuffer[dataIndex] = mean;  
-    stdDevBuffer[dataIndex] = sqrt(standardDeviation / PPG_BUFFER_LEN);  
+    // 计算平均值
+    float sum = 0.0, mean=0.0, stdDeviation = 0.0;
+    for (int i = 0; i < PPG_BUFFER_LEN; ++i) {
+        sum += dataBuffer[(data_index + i) % PPG_BUFFER_LEN];
+    }
+    mean = sum / PPG_BUFFER_LEN;
 
-    // 更新索引  
-    dataIndex = (dataIndex + 1) % PPG_BUFFER_LEN;  
-   
-    return _peak;  
-}  
+    // 计算标准差
+    for (int i = 0; i < PPG_BUFFER_LEN; ++i) {
+        stdDeviation += pow(dataBuffer[(i) % PPG_BUFFER_LEN] - mean, 2);
+    }
+    meanBuffer[data_index] = mean;      // 更新平均缓冲区
+    stdDevBuffer[data_index] = sqrt(stdDeviation / PPG_BUFFER_LEN);  // 更新标准差缓冲区
+    data_index = (data_index + 1) % PPG_BUFFER_LEN;
+    return getPeak;
+}
 
-void CheezPPG::calculateHRHRV(void)  
-{   
-    if (_peak && !_ignoreReading)   
-    {  
-        if (!_firstPulseDetected)   
-        {   
-            _firstPulseTime = millis();  
-            _firstPulseDetected = true;  
-        }   
-        else  
-        {  
-            _secondPulseTime = millis();  
-            unsigned long pulseInterval = _secondPulseTime - _firstPulseTime;  
-            rrBuffer.push(pulseInterval);   
-            _firstPulseTime = _secondPulseTime;  
-        }  
-        _ignoreReading = true;  
-    }   
-    _ignoreReading = _peak ? _ignoreReading : false;  
-   
-    if (rrBuffer.isFull())   
-    {  
-        // 计算平均RR间隔  
-        float rrAvg = 0;  
-        int itemCount = rrBuffer.numItems();  
-        for (int i = 0; i < itemCount; i++)   
-        {  
-            int rrValue;  
-            rrBuffer.peek(i, rrValue);  
-            rrAvg += rrValue;  
-        }  
-        rrAvg /= itemCount;  
+void CheezPPG::calculateHRHRV(bool getPeak) 
+{
+    static bool _ignoreReading = false;
+    static bool _firstPulseDetected = false;
+    static unsigned long FirstPulseTime = 0;
+    static unsigned long SecondPulseTime = 0; 
 
-        // 计算心率  
-        float hr = (1000 * 60.0 / rrAvg);  
-        hr = (hr > 160) ? 160 : ((hr < 50) ? 50 : hr);  
+    if (getPeak && _ignoreReading == false) 
+    {
+        if (_firstPulseDetected == false)  {
+            FirstPulseTime = millis();
+            _firstPulseDetected = true;
+        } else {
+            SecondPulseTime = millis();
+            unsigned long PulseInterval = SecondPulseTime - FirstPulseTime; 
+            _rrBuffer.push(PulseInterval);                 
+            FirstPulseTime = SecondPulseTime;
+        }
+        _ignoreReading = true;
+    }
+    if (!getPeak) _ignoreReading = false;  
 
-        // 计算HRV (SDNN)  
-        float diffSum = 0;  
-        for (int i = 0; i < itemCount; i++)  
-        {  
-            int rrValue;  
-            rrBuffer.peek(i, rrValue);  
-            float diff = rrValue - rrAvg;  
-            diffSum += diff * diff;  
-        }  
-        diffSum = (diffSum > 90000) ? 90000 : diffSum;  
-        float hrv = sqrt(diffSum / (itemCount - 1));  
+    if (_rrBuffer.isFull()) {
+        // HR
+        int rrAvg = 0;
+        for (int i = 0; i < _rrBuffer.numItems(); i++) {
+            rrAvg += _rrBuffer.peek(i);  // 间隔总和
+        }
+        rrAvg = rrAvg / _rrBuffer.numItems(); 
+        _hr = (1000 * 60.0 / rrAvg);  // Heat Rate = 60 / RR(单位:BPM) 
 
-        // 从环形缓冲区移除最旧的元素  
-        int dummy;  
-        rrBuffer.pop(dummy);  
+        // HRV(SDNN)
+        unsigned long diffSum = 0;
+        for (int i = 0; i < _rrBuffer.numItems(); i++) {
+            diffSum += pow(_rrBuffer.peek(i) - rrAvg, 2);
+        }
+        diffSum = diffSum > 90000 ? 90000 : diffSum;
 
-        // 更新滤波器的HR和HRV  
-        _rrAvg = rrAvg;   
-        _hr = hr;  
-        _hrv = hrv;   
-    }  
-}  
-
-void CheezPPG::ppgProcess()  
-{   
-  _rawPPG = analogRead(_ppgPin);  
-  float averageFiltered = AverageFilter(_rawPPG);     
-  float bandpassFiltered = bandpassFilter(averageFiltered);  
-
-  uint8_t ppgPeak = detectPPGPeak(bandpassFiltered);   
-  uint8_t ppgState = detectWearStatus(bandpassFiltered);   
-  calculateHRHRV();  
-
-  if(!ppgState && enableWearCheck)  
-  {  
-      _rrAvg = 0;  
-      _hr = 0;  
-      _hrv = 0;   
-      _peak = 0;  
-      _filteredPPG = 0;  
-  }  
-}  
+        _hrv = sqrt(diffSum / (_rrBuffer.numItems() - 1));
+        _rrBuffer.pop(); 
+    }
+}
