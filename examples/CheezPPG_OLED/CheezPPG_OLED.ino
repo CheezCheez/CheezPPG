@@ -1,3 +1,35 @@
+/**
+******************************************************************************
+* @file   : CheezPPG_OLED.ino
+* @brief  ：需安装Arduino库：CheezPPG
+                            Adafruit_GFX
+                            Adafruit_SSD1306
+* @brief  : 输出：串口,波特率 115200
+            采样率：125Hz 
+            引脚连接：
+                  单片机  |   传感器
+                  D2      |   S2(黄色线)
+                  A0      |   S1(白色线)
+                  5V      |   V(红色线)
+                  GND     |   G(黑色线)
+ 
+            串口输出内容(ASCII码)：
+                  PPG,心率数据,HRV(SDNN)数据
+            OLED显示:
+                  * 佩戴检测
+                  * PPG,心率数据,HRV(SDNN)数据
+******************************************************************************
+* @attention
+*
+* Copyright (c) 2024 Cheez.
+* All rights reserved.
+*
+* This software is licensed under terms that can be found in the LICENSE file
+* in the root directory of this software component.
+* If no LICENSE file comes with this software, it is provided AS-IS.
+*
+******************************************************************************
+*/  
 #include "CheezPPG.h"   
 #include "zhLib.h"
 #include <Wire.h>
