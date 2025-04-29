@@ -187,6 +187,9 @@ void CheezPPG::calculateHRHRV(bool getPeak)
         }
         rrAvg = rrAvg / _rrBuffer.numItems(); 
         _hr = (1000 * 60.0 / rrAvg);  // Heat Rate = 60 / RR(单位:BPM) 
+        static int lastHr = 60;
+        _hr = (lastHr * 0.9 + _hr * 0.1); // 平滑心率数据
+        lastHr = _hr; // 更新上次心率
 
         // HRV(SDNN)
         unsigned long diffSum = 0;

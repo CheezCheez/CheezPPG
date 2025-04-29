@@ -55,8 +55,8 @@ private:
     int  _filteredPPG = 0;
     float _hr = 0, _hrv = 0;
  
-    RingBuffer<int, 5> _rrBuffer;
-    RingBuffer<int, 10> _avgBuffer; 
+    RingBuffer<int, 4> _rrBuffer;
+    RingBuffer<int, 8> _avgBuffer; 
 
     void calculateHRHRV(bool getPeak);
     float AverageFilter(float input);
