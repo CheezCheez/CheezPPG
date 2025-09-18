@@ -2,7 +2,7 @@
  * @file CheezPPG.h
  * @author Vecang @Cheez
  * @brief 
- * @version 1.1.1
+ * @version 1.1.1 
  * @date 2025-09-19
  * 
  * @copyright Copyright (c) 2025
