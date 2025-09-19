@@ -50,12 +50,12 @@ void loop() {
   if (ppg.checkSampleInterval()) {
     ppg.ppgProcess();
 
-    raw_PPG = (int)ppg.getRawPPG();
-    avg_PPG = (int)ppg.getAvgPPG();
-    filter_PPG = (int)ppg.getFilterPPG();
-    ppg_Peak = ppg.getPpgPeak();
-    hr = ppg.getPpgHr();
-    hrv = ppg.getPpgHrv();
+    raw_PPG    =     ppg.getRawPPG();
+    avg_PPG    =     ppg.getAvgPPG();
+    filter_PPG =  ppg.getFilterPPG();
+    ppg_Peak   =    ppg.getPpgPeak();
+    hr         = (int)ppg.getPpgHr();
+    hrv        =(int)ppg.getPpgHrv();
 
     if (!ppg.getPpgisWear()) {
       ppg_Peak = hr = hrv = 0;
@@ -64,12 +64,12 @@ void loop() {
       digitalWrite(LED_PIN, !ppg.getPpgPeak());
     }
 
-    Serial.println(String((int)ppg.getRawPPG()) + "," +  // 原始数据
-                   String((int)ppg.getAvgPPG()) + "," +  // 平滑滤波数据
-                   String((int)ppg.getFilterPPG()) + "," +  // 带通滤波数据
-                   String((int)ppg.getPpgPeak()) + "," +  // 心跳检测数据
-                   String((int)ppg.getPpgHr()) + "," +    // 心率数据
-                   String((int)ppg.getPpgHrv())           // HRV(SDNN)数据
+    Serial.println(String(raw_PPG) + "," +     // 原始数据
+                   String(avg_PPG) + "," +     // 平滑滤波数据
+                   String(filter_PPG) + "," +  // 带通滤波数据
+                   String(ppg_Peak) + "," +    // 心跳检测数据
+                   String(hr) + "," +          // 心率数据
+                   String(hrv)                 // HRV(SDNN)数据
     );
   }
 }

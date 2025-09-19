@@ -19,8 +19,28 @@ CheezPPG::CheezPPG(int inputPin, int sampleRate)
   for (i = 11; i >= 1; i--) _HRV_buffer[(unsigned char)(i - 1)] = 0;
 }
 
-void CheezPPG::setWearThreshold(int Threshold) { _wearThreshold = Threshold; }
+CheezPPG::CheezPPG(int inputPin, int sampleRate, unsigned char hr_min,
+                   unsigned char hr_max)
+    : _inputPin(inputPin),
+      _sampleRate(sampleRate),
+      _hr_min(hr_min),
+      _hr_max(hr_max) {
+  _moving_window_size = _sampleRate / 50;  // 设置移动平均窗口大小
+  _smallest = _sampleRate * 60 / _hr_max;  // 计算最小可能的心跳间隔
 
+  unsigned char i = 0;
+  for (i = 20; i >= 1; i--) _peak_window_HP[(unsigned char)(i - 1)] = 0;
+  for (i = 11; i >= 1; i--) _HR_buffer[(unsigned char)(i - 1)] = 0;
+  for (i = 11; i >= 1; i--) _RR_buffer[(unsigned char)(i - 1)] = 0;
+  for (i = 11; i >= 1; i--) _HRV_buffer[(unsigned char)(i - 1)] = 0;
+}
+
+/**
+ * @brief 定时器
+ * 
+ * @return true 
+ * @return false 
+ */
 bool CheezPPG::checkSampleInterval(void) {
   static unsigned long past_time;
   static long count_time;
@@ -38,6 +58,10 @@ bool CheezPPG::checkSampleInterval(void) {
   return false;
 }
 
+/**
+ * @brief PPG处理主函数
+ *
+ */
 void CheezPPG::ppgProcess(void) {
   _rawPPG = analogRead(_inputPin);
   _avgPPG = AverageFilter(_rawPPG);
@@ -45,6 +69,11 @@ void CheezPPG::ppgProcess(void) {
   statHRMAlgo(_filteredPPG);
 }
 
+/**
+ * @brief 心率算法主函数
+ *
+ * @param ppgData PPG数据
+ */
 void CheezPPG::statHRMAlgo(unsigned long ppgData) {
   unsigned char i;
   _moving_window_HP += ppgData;
@@ -54,31 +83,31 @@ void CheezPPG::statHRMAlgo(unsigned long ppgData) {
 
     updateWindow(_peak_window_HP, _moving_window_HP, (_moving_window_size + 1));
 
-    _moving_window_HP = 0;  // 重置移动平均累加器
-    ispeak = 0;             // 重置峰值标志
+    _moving_window_HP = 0;
+    ispeak = 0;
     _ispeakOnset = 0;
     _ispeakPeak = 0;
 
+    // 峰值
     if ((_last_peak > _smallest) && (ispeak == 0)) {
       ispeak = 1;
       _ispeakOnset = 1;
-      // 在21点缓冲区中寻找局部最大值（峰值）
-      for (i = 10; i >= 1; i--) {
-        // 检查中心点（第10个点）是否比左右各10个点都大
-        if (_peak_window_HP[10] < _peak_window_HP[(unsigned int)(10 - i)]) {
+      for (i = PEAK_WINDOW_HALF_SIZE; i >= 1; i--) {
+        if (_peak_window_HP[PEAK_WINDOW_HALF_SIZE] <
+            _peak_window_HP[(unsigned int)(PEAK_WINDOW_HALF_SIZE - i)]) {
           ispeak = 0;
           _ispeakOnset = 0;
         }
-        if (_peak_window_HP[10] < _peak_window_HP[(unsigned int)(10 + i)]) {
+        if (_peak_window_HP[PEAK_WINDOW_HALF_SIZE] <
+            _peak_window_HP[(unsigned int)(PEAK_WINDOW_HALF_SIZE + i)]) {
           ispeak = 0;
           _ispeakOnset = 0;
         }
       }
 
       if (ispeak == 1) {
-        // 找到局部最大值（峰值）
-        _last_peakValueLED1 = findMax(_peak_window_HP);  // 获取峰值幅度
-        _total_found_peak++;  // 增加总峰谷计数
+        _last_peakValueLED1 = findMax(_peak_window_HP);
+        _total_found_peak++;
 
         if (_total_found_peak > 10) {
           updateheart_rate(_HR_buffer, _last_peak);
@@ -89,39 +118,37 @@ void CheezPPG::statHRMAlgo(unsigned long ppgData) {
       }
     }
 
-    // 如果距离上一个谷值的时间足够长且当前不是峰值
+    // 谷值
     if ((_last_onset > _smallest) && (ispeak == 0)) {
-      // 在21点缓冲区中寻找局部最小值（谷值）
       ispeak = 1;
       _ispeakPeak = 1;
-      for (i = 10; i >= 1; i--) {
-        // 检查中心点是否比左右各10个点都小
-        if (_peak_window_HP[10] > _peak_window_HP[(unsigned int)(10 - i)]) {
+      for (i = PEAK_WINDOW_HALF_SIZE; i >= 1; i--) {
+        if (_peak_window_HP[PEAK_WINDOW_HALF_SIZE] >
+            _peak_window_HP[(unsigned int)(PEAK_WINDOW_HALF_SIZE - i)]) {
           ispeak = 0;
           _ispeakPeak = 0;
         }
-        if (_peak_window_HP[10] > _peak_window_HP[(unsigned int)(10 + i)]) {
+        if (_peak_window_HP[PEAK_WINDOW_HALF_SIZE] >
+            _peak_window_HP[(unsigned int)(PEAK_WINDOW_HALF_SIZE + i)]) {
           ispeak = 0;
           _ispeakPeak = 0;
         }
       }
 
-      // 找到局部最小值
       if (ispeak == 1) {
         _last_onsetValueLED1 = findMin(_peak_window_HP);
+
         _total_found_peak++;
-        _found_peak++;    // 增加本次处理的峰谷计数
-        _last_onset = 0;  // 重置谷值间隔计数器
+        _found_peak++;
+        _last_onset = 0;
       }
     }
 
-    // 每找到4个新的峰谷后更新一次心率值
-    if (_found_peak > 10) {
-      _found_peak = 0;                    // 重置计数器
-      _hr_temp = chooseRate(_HR_buffer);  // 从心率数组中选择有效心率值
-      _hrv_temp = chooseHRV(_HRV_buffer);  // 从心率数组中选择有效心率值
+    if (_found_peak > 8) {
+      _found_peak = 0;
+      _hr_temp = chooseRate(_HR_buffer);
+      _hrv_temp = chooseHRV(_HRV_buffer);
 
-      // 心率值有效性检查
       if ((_hr_temp > _hr_min) && (_hr_temp < _hr_max))
         heart_rate = _hr_temp;  // 更新最终心率值
 
@@ -137,6 +164,13 @@ void CheezPPG::statHRMAlgo(unsigned long ppgData) {
   _last_peak++;
 }
 
+/**
+ * @brief 更新移动平均窗口
+ *
+ * @param window 移动平均窗口数组
+ * @param sum 当前累加值
+ * @param n 当前累加值的样本数
+ */
 void CheezPPG::updateWindow(unsigned long *window, unsigned long sum,
                             unsigned char n) {
   unsigned char i;
@@ -147,79 +181,83 @@ void CheezPPG::updateWindow(unsigned long *window, unsigned long sum,
   if (n > 0) window[0] = (sum / n);  // 插入新的移动平均值
 }
 
+/**
+ * @brief 选择心率值，去除最高和最低值后计算平均心率
+ *
+ * @param rate 心率数组
+ * @return unsigned char  处理后的心率值
+ */
 unsigned char CheezPPG::chooseRate(unsigned char *rate) {
-  // 去除最高和最低值后计算平均心率
   unsigned char max_val, min_val, count;
   unsigned int total;
 
-  max_val = rate[0];  // 初始化最大值
-  min_val = rate[0];  // 初始化最小值
-  total = 0;          // 初始化累加和
-  count = 0;          // 初始化有效数据计数
+  max_val = rate[0];
+  min_val = rate[0];
+  total = 0;
+  count = 0;
 
-  // 遍历心率数组
   for (unsigned char i = 0; i < 7; i++) {
     unsigned char current_rate = rate[i];
-
     if (current_rate > 0) {
       max_val = (current_rate > max_val) ? current_rate : max_val;
       min_val = (current_rate < min_val) ? current_rate : min_val;
-
-      total += current_rate;  // 累加值
-      count++;                // 计数增加
+      total += current_rate;
+      count++;
     }
   }
 
-  // 计算平均值（去除最高和最低值）
   if (count >= 3) {
-    total = ((total - max_val - min_val) + ((count - 2) / 2)) /
-            (count - 2);  // 四舍五入
+    total = ((total - max_val - min_val) + ((count - 2) / 2)) / (count - 2);
   } else if (count > 0) {
     total = (total + count / 2) / count;
   }
 
-  return total;  // 返回处理后的心率值
+  return total;
 }
 
+/**
+ * @brief 选择HRV(SDNN)值，去除最高和最低值后计算平均HRV
+ *
+ * @param rate  HRV数组
+ * @return unsigned char  处理后的HRV(SDNN)值
+ */
 unsigned char CheezPPG::chooseHRV(unsigned char *rate) {
-  // 去除最高和最低值后计算平均HRV(SDNN)
   unsigned char max_val, min_val, count;
   unsigned int total;
 
-  max_val = rate[0];  // 初始化最大值
-  min_val = rate[0];  // 初始化最小值
-  total = 0;          // 初始化累加和
-  count = 0;          // 初始化有效数据计数
+  max_val = rate[0];
+  min_val = rate[0];
+  total = 0;
+  count = 0;
 
-  // 遍历HRV数组
   for (unsigned char i = 0; i < 7; i++) {
     unsigned char current_rate = rate[i];
 
     if (current_rate > 0) {
       max_val = (current_rate > max_val) ? current_rate : max_val;
       min_val = (current_rate < min_val) ? current_rate : min_val;
-
-      total += current_rate;  // 累加值
-      count++;                // 计数增加
+      total += current_rate;
+      count++;
     }
   }
-
-  // 计算平均值（去除最高和最低值）
   if (count >= 3) {
-    total = ((total - max_val - min_val) + ((count - 2) / 2)) /
-            (count - 2);  // 四舍五入
+    total = ((total - max_val - min_val) + ((count - 2) / 2)) / (count - 2);
   } else if (count > 0) {
     total = (total + count / 2) / count;
   }
-
-  return total;  // 返回处理后的HRV(SDNN)值
+  return total;
 }
 
+/**
+ * @brief 更新心率值数组
+ *
+ * @param rate 心率数组
+ * @param last 距离上一个峰值的采样点数
+ */
 void CheezPPG::updateheart_rate(unsigned char *rate, unsigned int last) {
   unsigned char i;
-  i = 60 * _sampleRate / last;  // 计算心率值（BPM）
+  i = 60 * _sampleRate / last;
 
-  // 心率值有效性检查
   if ((i > _hr_min) && (i < _hr_max)) {
     for (i = 11; i >= 1; i--) {
       rate[i] = rate[(unsigned char)(i - 1)];
@@ -228,6 +266,12 @@ void CheezPPG::updateheart_rate(unsigned char *rate, unsigned int last) {
   }
 }
 
+/**
+ * @brief 更新HRV(SDNN)值数组
+ *
+ * @param rrBuffer RR间期数组
+ * @param last 距离上一个峰值的采样点数
+ */
 void CheezPPG::updateHRV(float *rrBuffer, unsigned int last) {
   unsigned char i;
   for (i = 11; i >= 1; i--) {
@@ -236,7 +280,6 @@ void CheezPPG::updateHRV(float *rrBuffer, unsigned int last) {
   }
   rrBuffer[0] = _sampleRate * 1000 / last;  // ms
 
-  // 计算SDNN
   float meanRR = 0;
   for (i = 0; i < 12; i++) {
     meanRR += rrBuffer[i];
@@ -251,40 +294,56 @@ void CheezPPG::updateHRV(float *rrBuffer, unsigned int last) {
   _HRV_buffer[0] = sdnn_temp;
 }
 
+/**
+ * @brief 在数组中间位置找到最大值
+ *
+ * @param X 输入数组
+ * @return unsigned long 最大值
+ */
 unsigned long CheezPPG::findMax(unsigned long *X) {
-  unsigned long max_val = X[8];
-  for (unsigned char i = 9; i <= 12; i++) {
-    if (max_val < X[i]) max_val = X[i];  // 更新最大值
+  unsigned long max_val = X[(PEAK_WINDOW_HALF_SIZE - 2)];
+  for (unsigned char i = (PEAK_WINDOW_HALF_SIZE - 1);
+       i <= (PEAK_WINDOW_HALF_SIZE + 2); i++) {
+    if (max_val < X[i]) max_val = X[i];  
   }
   return max_val;
 }
 
+/**
+ * @brief 在数组中间位置找到最小值
+ *
+ * @param X 输入数组
+ * @return unsigned long 最小值
+ */
 unsigned long CheezPPG::findMin(unsigned long *X) {
-  unsigned long min_val = X[8];
-  for (unsigned char i = 12; i >= 9; i--) {
-    if (min_val > X[i]) min_val = X[i];  // 更新最小值
+  unsigned long min_val = X[(PEAK_WINDOW_HALF_SIZE - 2)];
+  for (unsigned char i = (PEAK_WINDOW_HALF_SIZE + 2);
+       i >= (PEAK_WINDOW_HALF_SIZE - 1); i--) {
+    if (min_val > X[i]) min_val = X[i];  
   }
   return min_val;
 }
 
+/**
+ * @brief 平滑滤波函数，使用简单移动平均滤波
+ *
+ * @param input 输入数据
+ * @return float 平滑滤波后的数据
+ */
 float CheezPPG::AverageFilter(float input) {
   float avgPPG = 0.0f;
-
-  // 如果缓冲尚未填满，直接累加；否则减去被覆盖的旧值再累加新值
+ 
   if (_avgCount < AVG_WINDOW_SIZE) {
     _avgSum += input;
     _avgBuffer[_avgIndex] = input;
     ++_avgCount;
-  } else {
-    // 覆盖位置上的旧值
+  } else { 
     _avgSum = _avgSum - _avgBuffer[_avgIndex] + input;
     _avgBuffer[_avgIndex] = input;
   }
-
-  // 前进写指针
+ 
   _avgIndex = (_avgIndex + 1) % AVG_WINDOW_SIZE;
-
-  // 仅在缓冲已填满时返回完整窗口平均（与原 isFull 语义一致）
+ 
   if (_avgCount == AVG_WINDOW_SIZE) {
     avgPPG = _avgSum / AVG_WINDOW_SIZE;
   }
@@ -292,6 +351,12 @@ float CheezPPG::AverageFilter(float input) {
   return avgPPG;
 }
 
+/**
+ * @brief 带通滤波函数，使用二阶IIR带通滤波器
+ *
+ * @param input 输入数据
+ * @return float 带通滤波后的数据
+ */
 float CheezPPG::bandpassFilter(float input) {
   static float x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0;
 
@@ -304,6 +369,17 @@ float CheezPPG::bandpassFilter(float input) {
   return output;
 }
 
+/**
+ * @brief 设置佩戴检测阈值
+ *
+ * @param Threshold 阈值
+ */
+void CheezPPG::setWearThreshold(int Threshold) { _wearThreshold = Threshold; }
+
+/**
+ * @brief 检测佩戴状态
+ *
+ */
 void CheezPPG::detectWearStatus() {
   long onset_peak_diff = _last_peakValueLED1 - _last_onsetValueLED1;
 

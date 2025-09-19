@@ -86,8 +86,8 @@ void loop() {
       display.clearDisplay();
     }
 
-    HR = czPPG.getPpgHr();
-    HRV = czPPG.getPpgHrv();
+    HR = (int)czPPG.getPpgHr();
+    HRV = (int)czPPG.getPpgHrv();
     bpPPG = czPPG.getFilterPPG();
 
   }
