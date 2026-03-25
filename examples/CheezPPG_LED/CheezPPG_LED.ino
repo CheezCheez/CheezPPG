@@ -44,6 +44,7 @@ float hr, hrv;
 void setup() {
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
+  ppg.setWearThreshold(80);  // 设置佩戴检测阈值，需根据实际情况调整
 }
 
 void loop() {

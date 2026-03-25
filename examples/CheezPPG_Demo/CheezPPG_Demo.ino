@@ -36,7 +36,10 @@ bool ppg_Peak;
 int raw_PPG, avg_PPG, filter_PPG;
 float hr, hrv;
 
-void setup() { Serial.begin(115200); }
+void setup() {
+  Serial.begin(115200);
+  ppg.setWearThreshold(80);  // 设置佩戴检测阈值，需根据实际情况调整
+}
 
 void loop() {
   if (ppg.checkSampleInterval()) {

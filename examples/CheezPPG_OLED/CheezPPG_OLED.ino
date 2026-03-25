@@ -44,10 +44,10 @@ int8_t sX = 0, x = 0, sY = 60, y = 0;
 float HR = 0, HRV = 0, bpPPG = 0; 
   
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 64, &Wire);
-CheezPPG czPPG(INPUT_PIN,125);
+CheezPPG ppg(INPUT_PIN,125);
 
-void setup() { 
-  Serial.begin(115200); 
+void setup() {
+  ppg.setWearThreshold(80); // 设置佩戴检测阈值，需根据实际情况调整
   pinMode(LED_PIN, OUTPUT); 
 
   Wire.begin();
@@ -72,12 +72,12 @@ void setup() {
 }
 
 void loop() { 
-  if (czPPG.checkSampleInterval()) 
+  if (ppg.checkSampleInterval()) 
   {   
-    czPPG.ppgProcess(); 
+    ppg.ppgProcess(); 
 
-    bool peak  = czPPG.getPpgPeak();
-    isWear = czPPG.getPpgisWear();   
+    bool peak  = ppg.getPpgPeak();
+    isWear = ppg.getPpgisWear();   
     if (isWear) digitalWrite(LED_PIN, !peak);
     static bool lastwear;
     if(lastwear!=isWear)
@@ -86,9 +86,9 @@ void loop() {
       display.clearDisplay();
     }
 
-    HR = czPPG.getPpgHr();
-    HRV = czPPG.getPpgHrv();
-    bpPPG = czPPG.getFilterPPG();
+    HR = ppg.getPpgHr();
+    HRV = ppg.getPpgHrv();
+    bpPPG = ppg.getFilterPPG();
 
   }
   
@@ -114,14 +114,7 @@ void loop() {
       display.println(F("  Not Wearing"));
       display.setCursor(110, 52);
       display.setTextSize(1);
-      display.println((int)bpPPG);
-      
-      Serial.print(bpPPG);
-      Serial.print(",");
-      Serial.print(0);
-      Serial.print(",");
-      Serial.println(0);
-
+      display.println((int)bpPPG); 
     } 
     else { 
       display.setCursor(0, 5);
@@ -151,12 +144,6 @@ void loop() {
         sX = 0;
         display.fillRect(0, 42, 128, 22, SSD1306_BLACK);
       }
-
-      Serial.print(bpPPG);
-      Serial.print(",");
-      Serial.print(HR);
-      Serial.print(",");
-      Serial.println(HRV);
     }
     display.display();  // 刷新显示
   } 
