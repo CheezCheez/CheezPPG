@@ -46,9 +46,9 @@ float HR = 0, HRV = 0, bpPPG = 0;
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 64, &Wire);
 CheezPPG ppg(INPUT_PIN,125);
 
-void setup() {
-  ppg.setWearThreshold(80); // 设置佩戴检测阈值，需根据实际情况调整
-  pinMode(LED_PIN, OUTPUT); 
+void setup() {  
+  pinMode(LED_PIN, OUTPUT);
+  ppg.setWearThreshold(8); // 设置佩戴检测阈值，根据实际情况调整
 
   Wire.begin();
   Wire.setClock(400000L);  // 提高I2C通信速度 
@@ -86,8 +86,8 @@ void loop() {
       display.clearDisplay();
     }
 
-    HR = ppg.getPpgHr();
-    HRV = ppg.getPpgHrv();
+    HR = (int)ppg.getPpgHr();
+    HRV = (int)ppg.getPpgHrv();
     bpPPG = ppg.getFilterPPG();
 
   }
@@ -143,7 +143,7 @@ void loop() {
         x = 0;
         sX = 0;
         display.fillRect(0, 42, 128, 22, SSD1306_BLACK);
-      }
+      } 
     }
     display.display();  // 刷新显示
   } 

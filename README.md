@@ -73,6 +73,7 @@ Cheez.PPG传感器通常采集的是绿光信号，具有较好的稳定性、�
 串口输出内容(ASCII码)：
         原始数据,平滑滤波数据,带通滤波数据,心跳检测数据,心率数据,HRV(SDNN)数据
 */
+
 #include "CheezPPG.h"
 
 #define INPUT_PIN A0     // PPG引脚
@@ -84,32 +85,38 @@ bool ppg_Peak;
 int raw_PPG, avg_PPG, filter_PPG;
 float hr, hrv;
 
-void setup() { Serial.begin(115200); }
+void setup() {
+  Serial.begin(115200);
+  ppg.setWearThreshold(8);  // 设置佩戴检测阈值，根据实际情况调整
+}
 
 void loop() {
   if (ppg.checkSampleInterval()) {
     ppg.ppgProcess();
 
-    raw_PPG = (int)ppg.getRawPPG();
-    avg_PPG = (int)ppg.getAvgPPG();
-    filter_PPG = (int)ppg.getFilterPPG();
+    raw_PPG = ppg.getRawPPG();
+    avg_PPG = ppg.getAvgPPG();
+    filter_PPG = ppg.getFilterPPG();
     ppg_Peak = ppg.getPpgPeak();
-    hr = ppg.getPpgHr();
-    hrv = ppg.getPpgHrv();
+    hr = (int)ppg.getPpgHr();
+    hrv = (int)ppg.getPpgHrv();
 
     if (!ppg.getPpgisWear()) {
       ppg_Peak = hr = hrv = 0;
     }
 
-    Serial.println((int)String(raw_PPG) + "," +     // 原始数据
-                   (int)String(avg_PPG) + "," +     // 平滑滤波数据
-                   (int)String(filter_PPG) + "," +  // 带通滤波数据
-                   (int)String(ppg_Peak) + "," +    // 心跳检测数据
-                   (int)String(hr) + "," +          // 心率数据
-                   (int)String(hrv)                 // HRV(SDNN)数据
+    Serial.println(String(raw_PPG) + "," +     // 原始数据
+                   String(avg_PPG) + "," +     // 平滑滤波数据
+                   String(filter_PPG) + "," +  // 带通滤波数据
+                   String(ppg_Peak) + "," +    // 心跳检测数据
+                   String(hr) + "," +          // 心率数据
+                   String(hrv)                 // HRV(SDNN)数据
     );
   }
 }
+
+/******************************************************************************/
+
 ```
 
 #### 实验结果
